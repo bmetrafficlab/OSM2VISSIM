@@ -107,60 +107,6 @@ for datatype in datatypes:
 
 g.close()
 
-for relations in root:
-
-    if relations.tag=='relation':
-    
-        for relation in relations:
-            
-            if 'k' in relation.attrib:
-
-                if relation.attrib['k']=='restriction' and (relation.attrib['v']=='no_right_turn' or relation.attrib['v']=='no_left_turn'):
-
-                    for ways in relations:
-                        
-                        if 'role' in ways.attrib:
-
-                            if ways.attrib['role']=='from':
-                            
-                                from_way_id=int(ways.attrib['ref'])
-                                
-                            if ways.attrib['role']=='to':
-                            
-                                to_way_id=int(ways.attrib['ref'])
-                                
-                        else:
-                            
-                            continue
-                                
-                    no_turn_restrictions.append([from_way_id, to_way_id])
-                    no_turn_restrictions.append([-from_way_id, to_way_id])
-                    no_turn_restrictions.append([from_way_id, -to_way_id])
-                    no_turn_restrictions.append([-from_way_id, -to_way_id])
-                        
-                if relation.attrib['k']=='restriction' and (relation.attrib['v']=='only_straight_on' or relation.attrib['v']=='only_right_turn' or relation.attrib['v']=='only_left_turn'):
-            
-                    for ways in relations:
-                        
-                        if 'role' in ways.attrib:
-
-                            if ways.attrib['role']=='from':
-                            
-                                from_way_id=int(ways.attrib['ref'])
-                                
-                            if ways.attrib['role']=='to':
-                                
-                                to_way_id=int(ways.attrib['ref'])
-                                
-                        else:
-                            
-                            continue
-                                
-                    only_restrictions.append([from_way_id, to_way_id])
-                    only_restrictions.append([-from_way_id, to_way_id])
-                    only_restrictions.append([from_way_id, -to_way_id])
-                    only_restrictions.append([-from_way_id, -to_way_id])
-
 layer = data_source.GetLayer('lines')
 
 features=[x for x in layer]
@@ -414,6 +360,15 @@ for feature in features:
             Vissim.Net.Links.AddLink(way_id, str(sg.LineString(linestring)), widths)
             )
         
+                    
+        if Links[-1].AttValue('Length2D')<5:
+            
+            Vissim.Net.Links.RemoveLink(Links[-1])
+            
+            del Links[-1]
+            
+            continue
+        
         Links[-1].SetAttValue('Name', way_id)
         
         if width==3.5 or width==2.75:
@@ -452,12 +407,6 @@ for feature in features:
         
         link_key=link_key+1
 
-# for link in Vissim.Net.Links:
-    
-#     if link.AttValue('Length2D')<5:
-        
-#         Vissim.Net.Links.RemoveLink(link)
-
 def Create_connectors(way_type):
     
     if way_type==carways:
@@ -468,70 +417,104 @@ def Create_connectors(way_type):
         
         print('Creating cycleway connectors')
     
+    serial_number=0
+    
     for way_1 in way_type:
+        
+        if serial_number%5==0:
+            
+            percentage=serial_number/len(way_type)*100
+            
+            print("%.2f" % percentage)
+            
+        serial_number=serial_number+1
+        
+        for restriction in only_restrictions:
+            
+            if restriction[0]==int(way_1.AttValue('Name')):
+                
+                has_rest=True
 
-        # try:        
-    
-            for restriction in only_restrictions:
-                
-                if restriction[0]==int(way_1.AttValue('Name')):
-                    
-                    has_rest=True
-    
-                    break
-                
-                else:
-                    
-                    has_rest=False
-        
-        
-        
-            linkpolypts_1=way_1.LinkPolyPts.GetAll()
+                break
             
-            coord_x_1=linkpolypts_1[-1].AttValue('X')
-            coord_y_1=linkpolypts_1[-1].AttValue('Y')
-            
-            # break_out_flag=False
-            
-            for way_2 in way_type:             
-                
-                 # try:
-                 
-                # if break_out_flag:
-                    
-                #     continue     
-                
-                if has_rest and not([int(way_1.AttValue('Name')),int(way_2.AttValue('Name'))] in only_restrictions):
+            else:
+
+                has_rest=False
+
+        linkpolypts_1=way_1.LinkPolyPts.GetAll()
+        
+        coord_x_1=linkpolypts_1[-1].AttValue('X')
+        coord_y_1=linkpolypts_1[-1].AttValue('Y')
+
+        for way_2 in way_type:             
+
+            if has_rest and not([int(way_1.AttValue('Name')),int(way_2.AttValue('Name'))] in only_restrictions):
     
-                    continue
+                continue
+            
+            way_2_start=[way_2.LinkPolyPts.GetAll()[0].AttValue('X'),way_2.LinkPolyPts.GetAll()[0].AttValue('Y')]
+            
+            way_2_end=[way_2.LinkPolyPts.GetAll()[-1].AttValue('X'),way_2.LinkPolyPts.GetAll()[-1].AttValue('Y')]
+            
+            if math.dist([coord_x_1, coord_y_1],way_2_start)>way_2.AttValue('Length2D') and math.dist([coord_x_1, coord_y_1],way_2_end)>way_2.AttValue('Length2D'):
+                
+                continue
+            
+            if len(way_2.LinkPolyPts.GetAll())>2:
+                   
+                cycle_length=len(way_2.LinkPolyPts.GetAll())-2
                                     
-                for linkpoly_2_index in range(len(way_2.LinkPolyPts.GetAll())-3):
-                    
-                    linkpoly_2=way_2.LinkPolyPts.GetAll()[linkpoly_2_index]
-                    
-                    coord_x_2=linkpoly_2.AttValue('X')
-                    coord_y_2=linkpoly_2.AttValue('Y')
-                    
-                # linkpolypts_2=way_2.LinkPolyPts.GetAll()
-                
-                # coord_x_2=linkpolypts_2[0].AttValue('X')
-                # coord_y_2=linkpolypts_2[0].AttValue('Y')
-           
-                    if way_1!=way_2 and int(way_1.AttValue('Name'))!=-int(way_2.AttValue('Name')) and not([int(way_1.AttValue('Name')),int(way_2.AttValue('Name'))] in no_turn_restrictions) and math.dist([coord_x_1, coord_y_1], [coord_x_2, coord_y_2])<5:
+            else:
+        
+                cycle_length=1    
+        
+            for linkpoly_2_index in range(cycle_length):
 
-                        lanes=min(way_1.AttValue('NumLanes'), way_2.AttValue('NumLanes'))
+                linkpoly_2=way_2.LinkPolyPts.GetAll()[linkpoly_2_index]
+                
+                coord_x_2=linkpoly_2.AttValue('X')
+                coord_y_2=linkpoly_2.AttValue('Y')
+       
+                if way_1!=way_2 and int(way_1.AttValue('Name'))!=-int(way_2.AttValue('Name')) and not([int(way_1.AttValue('Name')),int(way_2.AttValue('Name'))] in no_turn_restrictions) and math.dist([coord_x_1, coord_y_1], [coord_x_2, coord_y_2])<5:
+
+                    polypoints=way_2.LinkPolyPts.GetAll()
+                    
+                    points_for_link=polypoints[0:linkpoly_2_index+1]
+                    
+                    coords_for_link=[]
+                    
+                    for point in range(len(points_for_link)):
                         
-                        if lanes==1:
+                        coords_for_link.append([points_for_link[point].AttValue('X'), points_for_link[point].AttValue('Y')])
+                    
+                    if linkpoly_2_index!=0:
+                
+                        Links.append(
+                            Vissim.Net.Links.AddLink(0, str(sg.LineString(coords_for_link)), [3.5])
+                            )
                         
-                            lane_connection_1=1
-                            lane_connection_2=1
-                            
-                        else: 
-                            
-                            lane_connection_1=way_1.AttValue('NumLanes')-lanes+1
-                            lane_connection_2=way_2.AttValue('NumLanes')-lanes+1
+                    lanes=min(way_1.AttValue('NumLanes'), way_2.AttValue('NumLanes'))
+                    
+                    if lanes==1:
+                    
+                        lane_connection_1=1
+                        lane_connection_2=1
                         
-                                        
+                    else: 
+                        
+                        lane_connection_1=way_1.AttValue('NumLanes')-lanes+1
+                        lane_connection_2=way_2.AttValue('NumLanes')-lanes+1
+                    
+                    if linkpoly_2_index!=0 and linkpoly_2_index!=cycle_length-1:
+                        
+                        connect_pos=Links[-1].AttValue('Length2D')+5
+                        
+                    elif linkpoly_2_index!=0:
+                        
+                        connect_pos=Links[-1].AttValue('Length2D')
+                        
+                    else:
+                                    
                         if way_2.AttValue('Length2D')<3:
                             
                             connect_pos=1
@@ -543,21 +526,16 @@ def Create_connectors(way_type):
                         else:
                             
                             connect_pos=5
-            
-                        Vissim.Net.Links.AddConnector(0,way_1.Lanes.ItemByKey(lane_connection_1), way_1.AttValue('Length2D'), way_2.Lanes.ItemByKey(lane_connection_2), connect_pos, lanes, 'LINESTRING EMPTY')
-               
-                        # break_out_flag=True 
-               
-                        break
-                           
-        #          except:
-                   
-        #              pass
+    
+                    Vissim.Net.Links.AddConnector(0,way_1.Lanes.ItemByKey(lane_connection_1), way_1.AttValue('Length2D'), way_2.Lanes.ItemByKey(lane_connection_2), connect_pos, lanes, 'LINESTRING EMPTY')
+
+                    if linkpoly_2_index!=0:
                     
-        # except: 
-            
-        #      pass
+                        Vissim.Net.Links.RemoveLink(Links[-1])
                         
+                        
+
+                    break 
 
 print('Creating signal heads')
 
@@ -713,11 +691,70 @@ for nodes in root:
                                         
                                         pass
 
+for relations in root:
+
+    if relations.tag=='relation':
+    
+        for relation in relations:
+            
+            if 'k' in relation.attrib:
+
+                if relation.attrib['k']=='restriction' and (relation.attrib['v']=='no_right_turn' or relation.attrib['v']=='no_left_turn'):
+
+                    for ways in relations:
+                        
+                        if 'role' in ways.attrib:
+
+                            if ways.attrib['role']=='from':
+                            
+                                from_way_id=int(ways.attrib['ref'])
+                                
+                            if ways.attrib['role']=='to':
+                            
+                                to_way_id=int(ways.attrib['ref'])
+                                
+                        else:
+                            
+                            continue
+                                
+                    no_turn_restrictions.append([from_way_id, to_way_id])
+                    no_turn_restrictions.append([-from_way_id, to_way_id])
+                    no_turn_restrictions.append([from_way_id, -to_way_id])
+                    no_turn_restrictions.append([-from_way_id, -to_way_id])
+                        
+                if relation.attrib['k']=='restriction' and (relation.attrib['v']=='only_straight_on' or relation.attrib['v']=='only_right_turn' or relation.attrib['v']=='only_left_turn'):
+            
+                    for ways in relations:
+                        
+                        if 'role' in ways.attrib:
+
+                            if ways.attrib['role']=='from':
+                            
+                                from_way_id=int(ways.attrib['ref'])
+                                
+                            if ways.attrib['role']=='to':
+                                
+                                to_way_id=int(ways.attrib['ref'])
+                                
+                        else:
+                            
+                            continue
+                                
+                    only_restrictions.append([from_way_id, to_way_id])
+                    only_restrictions.append([-from_way_id, to_way_id])
+                    only_restrictions.append([from_way_id, -to_way_id])
+                    only_restrictions.append([-from_way_id, -to_way_id])
+
 Create_connectors(cycleways)
 
 Create_connectors(carways)
 
 Vissim.SaveNetAs(os.path.join(os.getcwd(),"test.inpx"))
+
+done_window=tk.Tk(className='Done')
+
+done_canvas=tk.Canvas(done_window, width=250, height=200)
+done_canvas.pack()
 
 input("You may split links without connection. If you are done, press 'Enter'!" )
 
