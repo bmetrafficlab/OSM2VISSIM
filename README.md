@@ -8,6 +8,6 @@ Python version: 3.9
 
 PTV VISSIM version: 2020
 
-Our website: http://traffic.bme.hu/
+Our website: https://traffic.bme.hu/
 
 Short demo video: https://youtu.be/1wM5gEJt8z8
